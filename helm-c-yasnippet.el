@@ -199,19 +199,18 @@ If SNIPPET-FILE does not contain directory, it is placed in default snippet dire
 ;;              for file = (yas--template-file template-struct) ;`yas--template-content'			  
               do (progn (push template templates)
                         (push `(,name . ,template) transformed)
-						(push `(,template . ,key) template-key-alist)
-               ;;         (push `(,template . ,file) template-file-alist)
+			(push `(,template . ,key) template-key-alist)
+;;                        (push `(,template . ,file) template-file-alist)
 						)
               finally (progn (push `(candidates . ,templates) result-alist)
                              (push `(transformed . ,transformed) result-alist)
-                 ;;            (push `(template-file-alist . ,template-file-alist) result-alist)
+;;                             (push `(template-file-alist . ,template-file-alist) result-alist)
                              (push `(template-key-alist . ,template-key-alist) result-alist)))
         result-alist)
       )))
 
 (defun helm-c-yas-get-modes ()
-  (let ((cur-major-mode helm-c-yas-cur-major-mode))
-    (list cur-major-mode)))
+  (yas--modes-to-activate))
 
 (defun helm-c-yas-get-cmp-context ()
   "Return list (initial-input point-start point-end)
@@ -231,6 +230,11 @@ like `yas--current-key'"
 (defun helm-c-yas-get-key-by-template (template alist) ;str template
   "Return key"
   (assoc-default template (assoc-default 'template-key-alist alist)))
+
+(defun helm-c-yas-get-name-by-template (template alist) ;str template
+  "Return name"
+  (car (rassoc template (assoc-default 'transformed alist))))
+
 
 (defun helm-c-yas-get-candidates (alist)
   "Return list of template"
@@ -262,29 +266,21 @@ like `yas--current-key'"
     (setq transformed-list (sort* transformed-list 'string< :key 'car))
     transformed-list))
  
-(defun helm-c-yas-find-snippet-file-by-key (key)
-  (let ((modes (helm-c-yas-get-modes))
-        (snippet-dirs helm-c-yas-snippets-dir-list))
-    (let ((found-path (loop for mode in modes
-                            for test-re = (concat (symbol-name mode) "/" key "$")
-                            for path =  (helm-c-yas-find-snippet-file-aux test-re snippet-dirs)
-                            when path return path)))
-      ;; if not found in major-mode try to find in all dirs
-      (unless found-path
-        (setq found-path (helm-c-yas-find-snippet-file-aux (concat "/" key "$") snippet-dirs)))
-      found-path)))
+(defun helm-c-yas-find-snippet-file-by-key (key) 
+  (loop for mode in (helm-c-yas-get-modes) 
+  	do (let ((file  (helm-c-yas-find-snippet-file-by-key-for-mode key mode) ))
+  	     (when file (return file)) )))
 
-(defun helm-c-yas-find-snippet-file-aux (test-re dirs)
-  (loop with done
-        with path
-        for directory in dirs
-        for files = (directory-files directory t)
-        unless done
-        do (loop for file in files
-                 when (string-match test-re file)
-                 return (setq done t
-                              path file))
-        finally return path))
+(defun helm-c-yas-find-snippet-file-by-key-for-mode (key mode)
+  (loop for dir in yas-snippet-dirs
+	do (let* ((mod-dir  (concat dir "/" (symbol-name mode)) )
+		  (file (helm-c-yas-search-dir mod-dir key )) )
+	     (when file (return file)) )))
+	     
+(defun helm-c-yas-search-dir (dir test-re) 
+  (loop for file in (directory-files dir t)
+	when (string-match test-re file)
+	return file))
 
 (defun helm-c-yas-find-file-snippet-by-template (template &optional other-window)
  (let* ((path (helm-c-yas-get-path-by-template template))
@@ -296,8 +292,8 @@ like `yas--current-key'"
 
 
 (defun helm-c-yas-get-path-by-template (template)
-  (let* ((key (helm-c-yas-get-key-by-template template helm-c-yas-cur-snippets-alist))
-         (path (helm-c-yas-find-snippet-file-by-key key)))
+  (let* ((name (helm-c-yas-get-name-by-template template helm-c-yas-cur-snippets-alist))
+         (path (helm-c-yas-find-snippet-file-by-key name)))
     path))
 
 (defun helm-c-yas-match (candidate)
